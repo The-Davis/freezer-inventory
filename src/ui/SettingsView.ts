@@ -166,8 +166,12 @@ export class SettingsView {
     document.querySelectorAll('.app-icon-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         this.appIcon = (btn as HTMLElement).dataset['id'] ?? 'snowflake';
-        this.remountList(); // using remountList just to re-render the whole page for simplicity, but wait, remountList only remounts the freezer list. Let's re-render entirely.
-        void this.render(); // Just re-render
+        document.querySelectorAll('.app-icon-btn').forEach(b => {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-secondary');
+        });
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary');
       });
     });
 
@@ -270,6 +274,9 @@ export class SettingsView {
 
   private async save(): Promise<void> {
     // Collect current name/icon values from inputs
+    const appTitleInput = document.getElementById('app-title-input') as HTMLInputElement | null;
+    if (appTitleInput) this.appTitle = appTitleInput.value;
+
     this.freezers.forEach((f, idx) => {
       const nameInput = document.getElementById(`freezer-name-${idx}`) as HTMLInputElement | null;
       if (nameInput) f.name = nameInput.value.trim() || f.name;
@@ -289,11 +296,14 @@ export class SettingsView {
     }
     errorEl.classList.add('hidden');
 
+    const finalTitle = this.appTitle.trim() || 'My Inventory';
     await this.app.storage.saveSettings({ 
-      appTitle: this.appTitle.trim() || 'My Inventory',
+      appTitle: finalTitle,
       appIcon: this.appIcon,
       freezers: this.freezers 
     });
+
+    document.title = finalTitle;
 
     feedbackEl.classList.remove('hidden');
     setTimeout(() => feedbackEl.classList.add('hidden'), 2000);
