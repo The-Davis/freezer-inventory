@@ -47,7 +47,7 @@ export class ShelfView {
           new Date(a.storedAt).getTime() - new Date(b.storedAt).getTime()
       );
 
-    const freezerName = this.freezer?.name ?? 'Freezer';
+    const freezerName = this.freezer?.name ?? 'Container';
     const title = `${freezerName} — Shelf ${this.shelfNumber}`;
 
     this.container.innerHTML = `
@@ -123,7 +123,7 @@ export class ShelfView {
           <button class="btn btn-danger btn-sm" id="remove-btn-${item.id}">Remove</button>
         </div>
         <div class="remove-confirm-inline hidden" id="confirm-${item.id}">
-          <span class="confirm-inline-text">Remove from freezer?</span>
+          <span class="confirm-inline-text">Remove from container?</span>
           <button class="btn btn-danger btn-sm" id="confirm-yes-${item.id}">Confirm</button>
           <button class="btn btn-secondary btn-sm" id="confirm-no-${item.id}">Cancel</button>
         </div>
@@ -188,7 +188,7 @@ export class ShelfView {
     if (id.startsWith('print-btn-')) {
       const itemId = id.replace('print-btn-', '');
       const item = this.items.find((i) => i.id === itemId);
-      if (item) void showPrintModal(item, this.freezer?.name ?? 'Freezer', '🖨 Print Label');
+      if (item) void showPrintModal(item, this.freezer?.name ?? 'Container', '🖨 Print Label');
       return;
     }
     if (id.startsWith('remove-btn-')) {

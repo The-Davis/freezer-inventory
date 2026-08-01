@@ -63,7 +63,7 @@ export class ExpiringView {
   }
 
   private freezerName(freezerId: string): string {
-    return this.freezers.find((f) => f.id === freezerId)?.name ?? 'Freezer';
+    return this.freezers.find((f) => f.id === freezerId)?.name ?? 'Container';
   }
 
   private renderSection(

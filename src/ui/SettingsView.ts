@@ -2,7 +2,7 @@ import type { App } from './App';
 import type { Freezer } from '../models/Freezer';
 import type { AppState } from '../storage/IStorage';
 import { createFreezer } from '../models/Freezer';
-import { esc, renderHeader, bindBackButton } from './common';
+import { esc, renderHeader, bindBackButton, AVAILABLE_ICONS } from './common';
 
 const MIN_SHELVES = 1;
 const MAX_SHELVES = 20;
@@ -10,6 +10,8 @@ const MAX_SHELVES = 20;
 export class SettingsView {
   private freezers: Freezer[] = [];
   private itemCountMap = new Map<string, number>(); // freezerId → item count
+  private appTitle = 'My Inventory';
+  private appIcon = 'snowflake';
 
   constructor(
     private container: HTMLElement,
@@ -22,6 +24,8 @@ export class SettingsView {
       this.app.storage.getItems(),
     ]);
 
+    this.appTitle = settings.appTitle ?? 'My Inventory';
+    this.appIcon = settings.appIcon ?? 'snowflake';
     this.freezers = settings.freezers.map((f) => ({ ...f })); // shallow copy for editing
 
     this.itemCountMap.clear();
@@ -41,15 +45,30 @@ export class SettingsView {
         ${renderHeader('Settings', this.app)}
         <div class="scroll-view">
 
-          <!-- Freezer list -->
+          <!-- App Identity -->
           <div class="settings-section">
-            <div class="settings-label">Freezers</div>
+            <div class="settings-label">App Identity</div>
+            <div class="settings-row">
+              <input type="text" class="form-input" id="app-title-input" value="${esc(this.appTitle)}" placeholder="My Inventory">
+            </div>
+            <div class="settings-row" style="margin-top:12px; justify-content: flex-start; gap: 8px;">
+              ${AVAILABLE_ICONS.map(ic => `
+                <button class="btn ${this.appIcon === ic.id ? 'btn-primary' : 'btn-secondary'} btn-sm app-icon-btn" data-id="${ic.id}" title="${ic.label}">
+                  ${ic.svg}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Container list -->
+          <div class="settings-section">
+            <div class="settings-label">Containers</div>
             <div id="freezer-list">
               ${this.freezers.map((f, idx) => this.renderFreezerRow(f, idx)).join('')}
             </div>
             <button class="btn btn-secondary" id="add-freezer-btn"
                     style="margin-top:12px;width:100%">
-              ＋ Add Freezer
+              ＋ Add Container
             </button>
           </div>
 
@@ -70,7 +89,7 @@ export class SettingsView {
           <div class="settings-section">
             <div class="settings-label">About</div>
             <p class="form-hint" style="line-height:1.6">
-              Freezer Inventory tracks what's in your freezers using browser
+              My Inventory tracks what's in your containers using browser
               storage or a local network server. Scan the QR code on a stored
               item to remove it instantly.
             </p>
@@ -96,20 +115,23 @@ export class SettingsView {
     const itemCount = this.itemCountMap.get(freezer.id) ?? 0;
     const canDelete = this.freezers.length > 1 && itemCount === 0;
     const deleteHint = this.freezers.length <= 1
-      ? 'At least one freezer required'
+      ? 'At least one container required'
       : itemCount > 0
         ? `${itemCount} item${itemCount !== 1 ? 's' : ''} — remove them first`
         : '';
 
     return `
       <div class="freezer-settings-row" id="freezer-row-${idx}">
-        <div class="freezer-settings-name-row">
+        <div class="freezer-settings-name-row" style="gap: 8px;">
+          <select class="form-input container-icon-select" id="freezer-icon-${idx}" style="flex-shrink: 0; width: auto; padding: 4px 8px; background-color: var(--card-bg);">
+            ${AVAILABLE_ICONS.map(ic => `<option value="${ic.id}" ${freezer.icon === ic.id ? 'selected' : ''}>${ic.label}</option>`).join('')}
+          </select>
           <input type="text"
                  class="form-input freezer-name-input"
                  id="freezer-name-${idx}"
                  value="${esc(freezer.name)}"
-                 placeholder="Freezer name"
-                 aria-label="Freezer name">
+                 placeholder="Container name"
+                 aria-label="Container name">
           <button class="btn btn-danger btn-sm delete-freezer-btn"
                   id="delete-freezer-${idx}"
                   data-idx="${idx}"
@@ -141,8 +163,20 @@ export class SettingsView {
   }
 
   private bindListeners(): void {
+    document.querySelectorAll('.app-icon-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.appIcon = (btn as HTMLElement).dataset['id'] ?? 'snowflake';
+        this.remountList(); // using remountList just to re-render the whole page for simplicity, but wait, remountList only remounts the freezer list. Let's re-render entirely.
+        void this.render(); // Just re-render
+      });
+    });
+
+    document.getElementById('app-title-input')?.addEventListener('input', (e) => {
+      this.appTitle = (e.target as HTMLInputElement).value;
+    });
+
     document.getElementById('add-freezer-btn')?.addEventListener('click', () => {
-      this.freezers.push(createFreezer(`Freezer ${this.freezers.length + 1}`));
+      this.freezers.push(createFreezer(`Container ${this.freezers.length + 1}`, 4, 'snowflake'));
       this.remountList();
     });
 
@@ -174,6 +208,13 @@ export class SettingsView {
     list.querySelectorAll<HTMLInputElement>('.freezer-name-input').forEach((input, idx) => {
       input.addEventListener('input', () => {
         if (this.freezers[idx]) this.freezers[idx]!.name = input.value;
+      });
+    });
+
+    // Icon select changes
+    list.querySelectorAll<HTMLSelectElement>('.container-icon-select').forEach((select, idx) => {
+      select.addEventListener('change', () => {
+        if (this.freezers[idx]) this.freezers[idx]!.icon = select.value;
       });
     });
 
@@ -212,10 +253,12 @@ export class SettingsView {
 
   /** Re-render just the freezer list (names etc stay, only list changes). */
   private remountList(): void {
-    // Capture current name inputs before wiping
+    // Capture current name and icon inputs before wiping
     this.freezers.forEach((f, idx) => {
       const nameInput = document.getElementById(`freezer-name-${idx}`) as HTMLInputElement | null;
       if (nameInput) f.name = nameInput.value;
+      const iconSelect = document.getElementById(`freezer-icon-${idx}`) as HTMLSelectElement | null;
+      if (iconSelect) f.icon = iconSelect.value;
     });
 
     const listEl = document.getElementById('freezer-list');
@@ -226,10 +269,12 @@ export class SettingsView {
   }
 
   private async save(): Promise<void> {
-    // Collect current name values from inputs
+    // Collect current name/icon values from inputs
     this.freezers.forEach((f, idx) => {
       const nameInput = document.getElementById(`freezer-name-${idx}`) as HTMLInputElement | null;
       if (nameInput) f.name = nameInput.value.trim() || f.name;
+      const iconSelect = document.getElementById(`freezer-icon-${idx}`) as HTMLSelectElement | null;
+      if (iconSelect) f.icon = iconSelect.value;
     });
 
     const errorEl   = document.getElementById('save-error')!;
@@ -238,13 +283,17 @@ export class SettingsView {
     // Validate — all names must be non-empty
     const unnamed = this.freezers.findIndex((f) => !f.name.trim());
     if (unnamed >= 0) {
-      errorEl.textContent = `Freezer ${unnamed + 1} needs a name.`;
+      errorEl.textContent = `Container ${unnamed + 1} needs a name.`;
       errorEl.classList.remove('hidden');
       return;
     }
     errorEl.classList.add('hidden');
 
-    await this.app.storage.saveSettings({ freezers: this.freezers });
+    await this.app.storage.saveSettings({ 
+      appTitle: this.appTitle.trim() || 'My Inventory',
+      appIcon: this.appIcon,
+      freezers: this.freezers 
+    });
 
     feedbackEl.classList.remove('hidden');
     setTimeout(() => feedbackEl.classList.add('hidden'), 2000);

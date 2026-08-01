@@ -68,7 +68,7 @@ export class FindView {
   }
 
   private freezerName(freezerId: string): string {
-    return this.freezers.find((f) => f.id === freezerId)?.name ?? 'Unknown Freezer';
+    return this.freezers.find((f) => f.id === freezerId)?.name ?? 'Unknown Container';
   }
 
   private filterItems(): FreezerItem[] {
@@ -144,7 +144,7 @@ export class FindView {
           <button class="btn btn-danger btn-sm" id="remove-btn-${item.id}">Remove</button>
         </div>
         <div class="remove-confirm-inline hidden" id="confirm-${item.id}">
-          <span class="confirm-inline-text">Remove from freezer?</span>
+          <span class="confirm-inline-text">Remove from container?</span>
           <button class="btn btn-danger btn-sm" id="confirm-yes-${item.id}">Confirm</button>
           <button class="btn btn-secondary btn-sm" id="confirm-no-${item.id}">Cancel</button>
         </div>

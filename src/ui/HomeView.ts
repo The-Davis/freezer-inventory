@@ -7,7 +7,7 @@ import {
   renderHeader,
   bindBackButton,
   ICON_SETTINGS,
-  ICON_SNOWFLAKE,
+  getIcon,
 } from './common';
 
 const MAX_DOTS = 8;
@@ -57,8 +57,8 @@ export class HomeView {
 
         <div class="scroll-view home-scroll">
           <div class="home-logo">
-            <span class="home-logo-icon">${ICON_SNOWFLAKE}</span>
-            <span class="home-logo-text">Freezer Inventory</span>
+            <span class="home-logo-icon">${getIcon(settings.appIcon)}</span>
+            <span class="home-logo-text">${esc(settings.appTitle ?? 'My Inventory')}</span>
           </div>
 
           ${freezers.map((freezer) =>
@@ -71,7 +71,7 @@ export class HomeView {
 
           <div class="add-freezer-row">
             <button class="btn btn-secondary" id="add-freezer-btn">
-              ＋ Add Freezer
+              ＋ Add Container
             </button>
           </div>
 
@@ -154,7 +154,7 @@ export class HomeView {
       <div class="freezer-outer" role="list" aria-label="${esc(freezer.name)} shelves">
         <div class="freezer-label-bar">
           <span class="freezer-title-text">
-            ${ICON_SNOWFLAKE} ${esc(freezer.name)}
+            ${getIcon(freezer.icon)} ${esc(freezer.name)}
           </span>
           <span class="total-count">
             ${freezerItems.length} item${freezerItems.length !== 1 ? 's' : ''}
