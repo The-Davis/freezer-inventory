@@ -10,7 +10,7 @@ Default Configuration is hosted on [Github Pages](https://the-davis.github.io/fr
 
 ## Features
 
-- **Visual freezer** — shelf-by-shelf view with at-a-glance item-count dots
+- **Visual container** — shelf-by-shelf view with at-a-glance item-count dots
 - **Store items** — name, shelf, category, brand, weight, volume, expiration date, notes
 - **QR code labels** — each item gets a unique ID and printable QR code; scan it to remove instantly
 - **Find** — live full-text search across all fields
@@ -128,7 +128,7 @@ https://your-site/?action=remove&id=<unique-id>
 ```
 
 - **Print** the label and stick it on the package.
-- When you take the item out of the freezer, **scan the label** with any QR
+- When you take the item out of the container, **scan the label** with any QR
   code reader. The app opens directly to a removal confirmation screen.
 
 The base URL is detected automatically from `window.location` — the same
@@ -198,8 +198,3 @@ PORT=8080 npm start
 - `server/config.json` and `data/` are gitignored — your data is never
   accidentally committed.
 
----
-
-## License
-
-MIT
