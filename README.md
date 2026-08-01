@@ -1,8 +1,10 @@
-# 🧊 Freezer Inventory
+# 🧊 Home Inventory
 
-A mobile-first freezer inventory tracker with QR code label support.
+A mobile-first home inventory tracker with QR code label support.
 Store items, search, track expiration dates, and scan labels to remove items
-as you take them out of the freezer.
+as you take them out of the container.
+
+Default Configuration is hosted on [Github Pages](https://the-davis.github.io/freezer-inventory/).
 
 ---
 
