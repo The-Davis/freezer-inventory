@@ -14,6 +14,7 @@ import {
   showModal,
   removeModal,
 } from './common';
+import { showPrintModal } from './qrModal';
 
 export class ShelfView {
   private items: FreezerItem[] = [];
@@ -113,10 +114,13 @@ export class ShelfView {
     return `
       <div class="item-actions">
         <div class="action-row" id="action-row-${item.id}">
-          <button class="btn btn-danger btn-sm" id="remove-btn-${item.id}">Remove</button>
+          <button class="btn btn-secondary btn-sm" id="edit-btn-${item.id}">Edit</button>
+          <button class="btn btn-secondary btn-sm" id="dup-btn-${item.id}">Duplicate</button>
+          <button class="btn btn-secondary btn-sm" id="print-btn-${item.id}">Print</button>
           ${hasTargets
             ? `<button class="btn btn-secondary btn-sm" id="move-btn-${item.id}">Move…</button>`
             : ''}
+          <button class="btn btn-danger btn-sm" id="remove-btn-${item.id}">Remove</button>
         </div>
         <div class="remove-confirm-inline hidden" id="confirm-${item.id}">
           <span class="confirm-inline-text">Remove from freezer?</span>
@@ -169,6 +173,24 @@ export class ShelfView {
 
   private handleButton(btn: HTMLButtonElement): void {
     const { id } = btn;
+    if (id.startsWith('edit-btn-')) {
+      const itemId = id.replace('edit-btn-', '');
+      const item = this.items.find((i) => i.id === itemId);
+      if (item) void this.app.navigate('store', { prefillItem: item, isEdit: true });
+      return;
+    }
+    if (id.startsWith('dup-btn-')) {
+      const itemId = id.replace('dup-btn-', '');
+      const item = this.items.find((i) => i.id === itemId);
+      if (item) void this.app.navigate('store', { prefillItem: item, isEdit: false });
+      return;
+    }
+    if (id.startsWith('print-btn-')) {
+      const itemId = id.replace('print-btn-', '');
+      const item = this.items.find((i) => i.id === itemId);
+      if (item) void showPrintModal(item, this.freezer?.name ?? 'Freezer', '🖨 Print Label');
+      return;
+    }
     if (id.startsWith('remove-btn-')) {
       const itemId = id.replace('remove-btn-', '');
       document.getElementById(`action-row-${itemId}`)?.classList.add('hidden');
