@@ -73,9 +73,9 @@ export class RemoveConfirmView {
         <div class="scroll-view">
           <div class="confirm-view">
             <div class="confirm-icon">🧊</div>
-            <div class="confirm-title">Remove from Freezer?</div>
+            <div class="confirm-title">Remove from Container?</div>
             <div class="confirm-subtitle">
-              Confirm that you are removing this item from your freezer inventory.
+              Confirm that you are removing this item from your inventory.
             </div>
 
             <div class="confirm-details">

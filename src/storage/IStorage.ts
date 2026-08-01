@@ -3,7 +3,9 @@ import type { Freezer } from '../models/Freezer';
 import { DEFAULT_FREEZER } from '../models/Freezer';
 
 export interface AppSettings {
-  /** Ordered list of freezers.  Always contains at least one entry. */
+  appTitle?: string;
+  appIcon?: string;
+  /** Ordered list of containers.  Always contains at least one entry. */
   freezers: Freezer[];
 }
 
@@ -15,6 +17,8 @@ export interface AppState {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  appTitle: 'My Inventory',
+  appIcon: 'snowflake',
   freezers: [DEFAULT_FREEZER],
 };
 

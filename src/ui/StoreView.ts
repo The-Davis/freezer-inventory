@@ -60,9 +60,9 @@ export class StoreView {
                 required autocomplete="off">
             </div>
 
-            <!-- Freezer -->
+            <!-- Container -->
             <div class="form-group">
-              <label class="form-label required">Freezer</label>
+              <label class="form-label required">Container</label>
               <div class="shelf-chip-group" id="freezer-chips">
                 ${this.freezers.map((f) => `
                   <button type="button"
