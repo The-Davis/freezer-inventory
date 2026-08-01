@@ -1,6 +1,7 @@
 import type { App } from './App';
 import type { FreezerItem } from '../models/Item';
 import { expiryStatus } from '../models/Item';
+import type { Freezer } from '../models/Freezer';
 import {
   esc,
   renderHeader,
@@ -24,16 +25,21 @@ export class HomeView {
       this.app.storage.getRecentlyRemoved(),
     ]);
 
-    // Count items per shelf
-    const shelfCounts: number[] = Array(settings.shelfCount).fill(0);
+    const { freezers } = settings;
+
+    // Count items per freezer per shelf
+    const countMap = new Map<string, number[]>(); // freezerId → shelfCounts[]
+    for (const freezer of freezers) {
+      countMap.set(freezer.id, Array(freezer.shelfCount).fill(0));
+    }
     for (const item of items) {
-      const idx = item.shelf - 1;
-      if (idx >= 0 && idx < settings.shelfCount) {
-        shelfCounts[idx]++;
+      const counts = countMap.get(item.freezerId);
+      if (counts && item.shelf >= 1 && item.shelf <= counts.length) {
+        counts[item.shelf - 1]++;
       }
     }
 
-    // Count expiring items (within 14 days)
+    // Count expiring items across all freezers
     const expiringCount = items.filter((item) => {
       if (!item.expirationDate) return false;
       const s = expiryStatus(item.expirationDate);
@@ -50,40 +56,37 @@ export class HomeView {
         ${renderHeader('', this.app, settingsBtn)}
 
         <div class="scroll-view home-scroll">
-          <!-- Logo area -->
           <div class="home-logo">
             <span class="home-logo-icon">${ICON_SNOWFLAKE}</span>
-            <span class="home-logo-text">Freezer</span>
+            <span class="home-logo-text">Freezer Inventory</span>
           </div>
 
-          <!-- Freezer visualization -->
-          <div class="freezer-outer" role="list" aria-label="Freezer shelves">
-            <div class="freezer-label-bar">
-              <span class="freezer-title-text">
-                ${ICON_SNOWFLAKE} INVENTORY
+          ${freezers.map((freezer) =>
+            this.renderFreezerCard(
+              freezer,
+              items.filter((i) => i.freezerId === freezer.id),
+              countMap.get(freezer.id) ?? []
+            )
+          ).join('')}
+
+          <div class="add-freezer-row">
+            <button class="btn btn-secondary" id="add-freezer-btn">
+              ＋ Add Freezer
+            </button>
+          </div>
+
+          ${recent ? `
+            <div class="banner" id="recent-banner">
+              <span class="banner-text">
+                Recently removed: <strong>${esc(recent.name)}</strong>
+                ${this.freezerNameFor(recent.freezerId, freezers)
+                  ? `<span class="text-muted"> — ${esc(this.freezerNameFor(recent.freezerId, freezers))}</span>`
+                  : ''}
               </span>
-              <span class="total-count">${items.length} item${items.length !== 1 ? 's' : ''}</span>
-            </div>
-
-            <div class="shelf-list">
-              ${shelfCounts.map((count, i) => this.renderShelf(i + 1, count)).join('')}
-            </div>
-          </div>
-
-          <!-- Recently removed banner -->
-          ${
-            recent
-              ? `<div class="banner" id="recent-banner">
-                   <span class="banner-text">
-                     Recently removed: <strong>${esc(recent.name)}</strong>
-                   </span>
-                   <button class="btn-link" id="reStore-btn">Re-store</button>
-                 </div>`
-              : ''
-          }
+              <button class="btn-link" id="reStore-btn">Re-store</button>
+            </div>` : ''}
         </div>
 
-        <!-- Bottom action bar -->
         <div class="bottom-bar">
           <button class="bottom-btn" id="find-btn">
             <span class="btn-icon-lg">🔍</span>
@@ -102,53 +105,83 @@ export class HomeView {
       </div>
     `;
 
-    // ── Event listeners ────────────────────────────────────────────────────
     bindBackButton(this.app);
 
-    document.getElementById('settings-btn')!.addEventListener('click', () => {
-      void this.app.navigate('settings');
-    });
+    document.getElementById('settings-btn')!.addEventListener('click', () =>
+      void this.app.navigate('settings')
+    );
+    document.getElementById('find-btn')!.addEventListener('click', () =>
+      void this.app.navigate('find')
+    );
+    document.getElementById('store-btn')!.addEventListener('click', () =>
+      void this.app.navigate('store')
+    );
+    document.getElementById('expiring-btn')!.addEventListener('click', () =>
+      void this.app.navigate('expiring')
+    );
 
-    document.getElementById('find-btn')!.addEventListener('click', () => {
-      void this.app.navigate('find');
-    });
+    document.getElementById('add-freezer-btn')?.addEventListener('click', () =>
+      void this.app.navigate('settings')
+    );
 
-    document.getElementById('store-btn')!.addEventListener('click', () => {
-      void this.app.navigate('store');
-    });
-
-    document.getElementById('expiring-btn')!.addEventListener('click', () => {
-      void this.app.navigate('expiring');
-    });
-
-    for (let i = 1; i <= settings.shelfCount; i++) {
-      document
-        .getElementById(`shelf-row-${i}`)
-        ?.addEventListener('click', () => {
-          void this.app.navigate('shelf', { shelfNumber: i });
-        });
+    // Shelf row click listeners — one per freezer per shelf
+    for (const freezer of freezers) {
+      for (let s = 1; s <= freezer.shelfCount; s++) {
+        document
+          .getElementById(`shelf-row-${freezer.id}-${s}`)
+          ?.addEventListener('click', () => {
+            void this.app.navigate('shelf', {
+              freezerId: freezer.id,
+              shelfNumber: s,
+            });
+          });
+      }
     }
 
     if (recent) {
-      document.getElementById('reStore-btn')?.addEventListener('click', () => {
-        void this.app.navigate('store', { prefillItem: recent });
-      });
+      document.getElementById('reStore-btn')?.addEventListener('click', () =>
+        void this.app.navigate('store', { prefillItem: recent, freezerId: recent.freezerId })
+      );
     }
   }
 
-  private renderShelf(shelfNum: number, count: number): string {
+  private renderFreezerCard(
+    freezer: Freezer,
+    freezerItems: FreezerItem[],
+    shelfCounts: number[]
+  ): string {
+    return `
+      <div class="freezer-outer" role="list" aria-label="${esc(freezer.name)} shelves">
+        <div class="freezer-label-bar">
+          <span class="freezer-title-text">
+            ${ICON_SNOWFLAKE} ${esc(freezer.name)}
+          </span>
+          <span class="total-count">
+            ${freezerItems.length} item${freezerItems.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <div class="shelf-list">
+          ${shelfCounts.map((count, i) =>
+            this.renderShelf(freezer.id, i + 1, count)
+          ).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderShelf(freezerId: string, shelfNum: number, count: number): string {
     const filled = Math.min(count, MAX_DOTS);
-    const extra = count > MAX_DOTS ? count - MAX_DOTS : 0;
+    const extra  = count > MAX_DOTS ? count - MAX_DOTS : 0;
 
     const dots = Array.from({ length: MAX_DOTS }, (_, i) =>
       i < filled
         ? '<div class="dot filled" aria-hidden="true"></div>'
-        : '<div class="dot empty" aria-hidden="true"></div>'
+        : '<div class="dot empty"  aria-hidden="true"></div>'
     ).join('');
 
     return `
       <div class="shelf-row"
-           id="shelf-row-${shelfNum}"
+           id="shelf-row-${esc(freezerId)}-${shelfNum}"
            role="listitem button"
            tabindex="0"
            aria-label="Shelf ${shelfNum}, ${count} item${count !== 1 ? 's' : ''}">
@@ -162,6 +195,9 @@ export class HomeView {
     `;
   }
 
-  // No external event listeners to clean up
+  private freezerNameFor(freezerId: string, freezers: Freezer[]): string {
+    return freezers.find((f) => f.id === freezerId)?.name ?? '';
+  }
+
   destroy(): void {}
 }

@@ -488,6 +488,11 @@ html, body {
   color: var(--accent-2);
   border-color: rgba(129, 140, 248, 0.20);
 }
+.tag.freezer-tag {
+  background: rgba(52, 211, 153, 0.10);
+  color: var(--success);
+  border-color: rgba(52, 211, 153, 0.20);
+}
 .tag.date-tag { color: var(--text-3); }
 .tag.expiry-danger {
   background: rgba(248, 113, 113, 0.14);
@@ -829,6 +834,18 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   color: var(--accent);
 }
 
+/* Move modal: group shelves by freezer */
+.move-group { margin-bottom: 10px; }
+.move-group:last-child { margin-bottom: 0; }
+.move-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 4px 4px 6px;
+}
+
 /* ── Empty state ────────────────────────────────────────────── */
 .empty-state {
   display: flex;
@@ -930,6 +947,31 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   gap: 12px;
 }
 .settings-description { font-size: 14px; color: var(--text-2); }
+
+/* Freezer management rows in Settings */
+.freezer-settings-row { padding: 0; }
+.freezer-settings-name-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.freezer-name-input { flex: 1; }
+.freezer-divider {
+  border: none;
+  border-top: 1px solid var(--border-2);
+  margin: 14px 0;
+}
+
+/* Add Freezer button section on home screen */
+.add-freezer-row {
+  display: flex;
+  justify-content: center;
+  padding: 14px 16px 2px;
+}
+.add-freezer-row .btn { min-width: 160px; }
+
+/* Spacing between multiple freezer cards */
+.freezer-outer + .freezer-outer { margin-top: 12px; }
 
 .number-stepper { display: flex; align-items: center; gap: 8px; }
 .stepper-btn {
