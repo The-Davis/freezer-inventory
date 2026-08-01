@@ -46,6 +46,8 @@ export class HomeView {
       return s === 'expired' || s === 'danger' || s === 'warning';
     }).length;
 
+    document.title = settings.appTitle?.trim() || 'My Inventory';
+
     const settingsBtn = `
       <button class="icon-btn" id="settings-btn" aria-label="Settings">
         ${ICON_SETTINGS}
