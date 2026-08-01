@@ -6,6 +6,7 @@ import {
   formatExpiryDate,
   daysUntilExpiry,
 } from '../models/Item';
+import type { Freezer } from '../models/Freezer';
 import {
   esc,
   renderHeader,
@@ -15,13 +16,15 @@ import {
 } from './common';
 
 export class ShelfView {
-  private selectedId: string | null = null;
   private items: FreezerItem[] = [];
-  private shelfCount = 4;
+  private freezer: Freezer | null = null;
+  private allFreezersList: Freezer[] = [];
+  private selectedId: string | null = null;
 
   constructor(
     private container: HTMLElement,
     private app: App,
+    private freezerId: string,
     private shelfNumber: number
   ) {}
 
@@ -31,19 +34,24 @@ export class ShelfView {
       this.app.storage.getSettings(),
     ]);
 
-    this.shelfCount = settings.shelfCount;
+    this.allFreezersList = settings.freezers;
+    this.freezer = settings.freezers.find((f) => f.id === this.freezerId) ?? null;
 
-    // Items on this shelf, oldest first
     this.items = allItems
-      .filter((i) => i.shelf === this.shelfNumber)
+      .filter(
+        (i) => i.freezerId === this.freezerId && i.shelf === this.shelfNumber
+      )
       .sort(
         (a, b) =>
           new Date(a.storedAt).getTime() - new Date(b.storedAt).getTime()
       );
 
+    const freezerName = this.freezer?.name ?? 'Freezer';
+    const title = `${freezerName} — Shelf ${this.shelfNumber}`;
+
     this.container.innerHTML = `
       <div class="view shelf-view">
-        ${renderHeader(`Shelf ${this.shelfNumber}`, this.app)}
+        ${renderHeader(title, this.app)}
         <div class="scroll-view">
           ${
             this.items.length === 0
@@ -58,7 +66,7 @@ export class ShelfView {
                    ${this.items.length} item${this.items.length !== 1 ? 's' : ''} — oldest first
                  </div>
                  <div class="item-list" id="item-list">
-                   ${this.items.map((item) => this.renderItemCard(item)).join('')}
+                   ${this.items.map((item) => this.renderCard(item)).join('')}
                  </div>`
           }
         </div>
@@ -66,52 +74,49 @@ export class ShelfView {
     `;
 
     bindBackButton(this.app);
-    this.bindItemListeners();
+    this.bindListeners();
   }
 
-  private renderItemCard(item: FreezerItem, expanded = false): string {
-    const isSelected = this.selectedId === item.id;
-    const expiryTag = item.expirationDate ? this.renderExpiryTag(item.expirationDate) : '';
+  private renderCard(item: FreezerItem, expanded = false): string {
+    const isSelected = this.selectedId === item.id && expanded;
+    const expiryTag   = item.expirationDate ? this.renderExpiryTag(item.expirationDate) : '';
     const categoryTag = item.category
-      ? `<span class="tag category-tag">${esc(item.category)}</span>`
-      : '';
+      ? `<span class="tag category-tag">${esc(item.category)}</span>` : '';
     const brandTag = item.brand
-      ? `<span class="tag">${esc(item.brand)}</span>`
-      : '';
+      ? `<span class="tag">${esc(item.brand)}</span>` : '';
     const dateTag = `<span class="tag date-tag">Stored ${formatStoredDate(item.storedAt)}</span>`;
-
-    const details = expanded && isSelected ? this.renderExpanded(item) : '';
 
     return `
       <div class="item-card ${isSelected ? 'selected' : ''} ${this.expiryCardClass(item)}"
-           id="card-${item.id}"
-           data-id="${item.id}"
-           role="button"
-           tabindex="0"
-           aria-expanded="${isSelected}">
+           id="card-${item.id}" data-id="${item.id}"
+           role="button" tabindex="0" aria-expanded="${isSelected}">
         <div class="item-name">${esc(item.name)}</div>
-        <div class="item-meta">
-          ${categoryTag}${brandTag}${dateTag}${expiryTag}
-        </div>
-        ${details}
+        <div class="item-meta">${categoryTag}${brandTag}${dateTag}${expiryTag}</div>
+        ${isSelected ? this.renderExpanded(item) : ''}
       </div>
     `;
   }
 
   private renderExpanded(item: FreezerItem): string {
+    // Build all move targets: shelves in every freezer (excluding current location)
+    const moveTargets = this.allFreezersList.flatMap((f) =>
+      Array.from({ length: f.shelfCount }, (_, i) => ({
+        freezerId: f.id,
+        freezerName: f.name,
+        shelf: i + 1,
+        isCurrent: f.id === this.freezerId && i + 1 === this.shelfNumber,
+      }))
+    ).filter((t) => !t.isCurrent);
+
+    const hasTargets = moveTargets.length > 0;
+
     return `
-      <div class="item-actions" id="actions-${item.id}">
-        <div class="action-row">
-          <button class="btn btn-danger btn-sm" id="remove-btn-${item.id}">
-            Remove
-          </button>
-          ${
-            this.shelfCount > 1
-              ? `<button class="btn btn-secondary btn-sm" id="move-btn-${item.id}">
-                   Move to Shelf…
-                 </button>`
-              : ''
-          }
+      <div class="item-actions">
+        <div class="action-row" id="action-row-${item.id}">
+          <button class="btn btn-danger btn-sm" id="remove-btn-${item.id}">Remove</button>
+          ${hasTargets
+            ? `<button class="btn btn-secondary btn-sm" id="move-btn-${item.id}">Move…</button>`
+            : ''}
         </div>
         <div class="remove-confirm-inline hidden" id="confirm-${item.id}">
           <span class="confirm-inline-text">Remove from freezer?</span>
@@ -124,23 +129,12 @@ export class ShelfView {
 
   private renderExpiryTag(expirationDate: string): string {
     const status = expiryStatus(expirationDate);
-    const days = daysUntilExpiry(expirationDate);
+    const days   = daysUntilExpiry(expirationDate);
     const dateStr = formatExpiryDate(expirationDate);
-    let cls = 'tag';
-    let label = `Exp ${dateStr}`;
-
-    if (status === 'expired') {
-      cls = 'tag expiry-danger';
-      label = `Expired ${dateStr}`;
-    } else if (status === 'danger') {
-      cls = 'tag expiry-danger';
-      label = `Exp in ${days}d`;
-    } else if (status === 'warning') {
-      cls = 'tag expiry-warning';
-      label = `Exp in ${days}d`;
-    }
-
-    return `<span class="${cls}">${label}</span>`;
+    if (status === 'expired') return `<span class="tag expiry-danger">Expired ${dateStr}</span>`;
+    if (status === 'danger')  return `<span class="tag expiry-danger">Exp in ${days}d</span>`;
+    if (status === 'warning') return `<span class="tag expiry-warning">Exp in ${days}d</span>`;
+    return `<span class="tag date-tag">Exp ${dateStr}</span>`;
   }
 
   private expiryCardClass(item: FreezerItem): string {
@@ -151,91 +145,63 @@ export class ShelfView {
     return '';
   }
 
-  private bindItemListeners(): void {
+  private bindListeners(): void {
     const list = document.getElementById('item-list');
     if (!list) return;
 
-    // Toggle card expansion on click
-    list.addEventListener('click', (e) => {
-      const card = (e.target as HTMLElement).closest('.item-card') as HTMLElement | null;
-      if (!card) return;
-      const id = card.dataset['id'];
-      if (!id) return;
-
-      // If clicking an action button, don't toggle
-      if ((e.target as HTMLElement).closest('button')) return;
-
-      this.selectedId = this.selectedId === id ? null : id;
-      this.rerenderList();
-    });
-
     list.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      const btn = target.closest('button') as HTMLButtonElement | null;
-      if (!btn) return;
+      const btn    = target.closest('button') as HTMLButtonElement | null;
 
-      const id = btn.id;
-
-      if (id.startsWith('remove-btn-')) {
-        const itemId = id.replace('remove-btn-', '');
-        this.showInlineConfirm(itemId);
+      if (btn) {
+        this.handleButton(btn);
         return;
       }
 
-      if (id.startsWith('confirm-yes-')) {
-        const itemId = id.replace('confirm-yes-', '');
-        void this.removeItem(itemId);
-        return;
-      }
-
-      if (id.startsWith('confirm-no-')) {
-        const itemId = id.replace('confirm-no-', '');
-        this.hideInlineConfirm(itemId);
-        return;
-      }
-
-      if (id.startsWith('move-btn-')) {
-        const itemId = id.replace('move-btn-', '');
-        void this.showMoveModal(itemId);
-        return;
+      const card = target.closest<HTMLElement>('[data-id]');
+      if (card) {
+        const id = card.dataset['id'] ?? '';
+        this.selectedId = this.selectedId === id ? null : id;
+        this.rerenderList();
       }
     });
+  }
+
+  private handleButton(btn: HTMLButtonElement): void {
+    const { id } = btn;
+    if (id.startsWith('remove-btn-')) {
+      const itemId = id.replace('remove-btn-', '');
+      document.getElementById(`action-row-${itemId}`)?.classList.add('hidden');
+      document.getElementById(`confirm-${itemId}`)?.classList.remove('hidden');
+      return;
+    }
+    if (id.startsWith('confirm-yes-')) {
+      void this.removeItem(id.replace('confirm-yes-', ''));
+      return;
+    }
+    if (id.startsWith('confirm-no-')) {
+      const itemId = id.replace('confirm-no-', '');
+      document.getElementById(`action-row-${itemId}`)?.classList.remove('hidden');
+      document.getElementById(`confirm-${itemId}`)?.classList.add('hidden');
+      return;
+    }
+    if (id.startsWith('move-btn-')) {
+      void this.showMoveModal(id.replace('move-btn-', ''));
+    }
   }
 
   private rerenderList(): void {
     const list = document.getElementById('item-list');
-    if (!list) return;
-    list.innerHTML = this.items
-      .map((item) => this.renderItemCard(item, true))
-      .join('');
-  }
-
-  private showInlineConfirm(itemId: string): void {
-    const actionRow = document
-      .getElementById(`actions-${itemId}`)
-      ?.querySelector<HTMLElement>('.action-row');
-    const confirmRow = document.getElementById(`confirm-${itemId}`);
-    if (actionRow) actionRow.classList.add('hidden');
-    if (confirmRow) confirmRow.classList.remove('hidden');
-  }
-
-  private hideInlineConfirm(itemId: string): void {
-    const actionRow = document
-      .getElementById(`actions-${itemId}`)
-      ?.querySelector<HTMLElement>('.action-row');
-    const confirmRow = document.getElementById(`confirm-${itemId}`);
-    if (actionRow) actionRow.classList.remove('hidden');
-    if (confirmRow) confirmRow.classList.add('hidden');
+    if (list) {
+      list.innerHTML = this.items.map((item) => this.renderCard(item, true)).join('');
+    }
   }
 
   private async removeItem(itemId: string): Promise<void> {
     const item = this.items.find((i) => i.id === itemId);
     if (!item) return;
-
     await this.app.storage.removeItem(itemId);
     await this.app.storage.saveRecentlyRemoved(item);
-
-    // Refresh view
     this.selectedId = null;
     await this.render();
   }
@@ -244,9 +210,25 @@ export class ShelfView {
     const item = this.items.find((i) => i.id === itemId);
     if (!item) return;
 
-    const shelves = Array.from({ length: this.shelfCount }, (_, i) => i + 1).filter(
-      (n) => n !== this.shelfNumber
-    );
+    // Group targets by freezer
+    const groups = this.allFreezersList.map((f) => ({
+      freezer: f,
+      shelves: Array.from({ length: f.shelfCount }, (_, i) => i + 1).filter(
+        (s) => !(f.id === this.freezerId && s === this.shelfNumber)
+      ),
+    })).filter((g) => g.shelves.length > 0);
+
+    const groupHtml = groups.map((g) => `
+      <div class="move-group">
+        <div class="move-group-label">${esc(g.freezer.name)}</div>
+        ${g.shelves.map((s) => `
+          <button class="shelf-option"
+                  data-freezer="${esc(g.freezer.id)}"
+                  data-shelf="${s}">
+            Shelf ${s} <span>›</span>
+          </button>`).join('')}
+      </div>
+    `).join('');
 
     const overlay = showModal(`
       <div class="modal-sheet">
@@ -255,17 +237,7 @@ export class ShelfView {
           <div class="modal-title">Move "${esc(item.name)}" to…</div>
         </div>
         <div class="modal-body">
-          <div class="shelf-select-list" id="shelf-select-list">
-            ${shelves
-              .map(
-                (n) =>
-                  `<button class="shelf-option" data-shelf="${n}">
-                     Shelf ${n}
-                     <span>›</span>
-                   </button>`
-              )
-              .join('')}
-          </div>
+          <div class="shelf-select-list">${groupHtml}</div>
           <button class="btn btn-secondary" id="modal-cancel" style="width:100%;margin-top:12px">
             Cancel
           </button>
@@ -276,27 +248,25 @@ export class ShelfView {
     overlay.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null;
       if (!btn) return;
-
-      if (btn.id === 'modal-cancel') {
-        removeModal(overlay);
-        return;
-      }
-
-      const shelfStr = btn.dataset['shelf'];
-      if (shelfStr) {
-        const newShelf = parseInt(shelfStr, 10);
-        void this.moveItem(item, newShelf, overlay);
-      }
+      if (btn.id === 'modal-cancel') { removeModal(overlay); return; }
+      const newFreezerId = btn.dataset['freezer'];
+      const newShelf     = parseInt(btn.dataset['shelf'] ?? '1', 10);
+      if (newFreezerId) void this.moveItem(item, newFreezerId, newShelf, overlay);
     });
   }
 
   private async moveItem(
     item: FreezerItem,
+    newFreezerId: string,
     newShelf: number,
     overlay: HTMLElement
   ): Promise<void> {
     removeModal(overlay);
-    await this.app.storage.updateItem({ ...item, shelf: newShelf });
+    await this.app.storage.updateItem({
+      ...item,
+      freezerId: newFreezerId,
+      shelf: newShelf,
+    });
     this.selectedId = null;
     await this.render();
   }

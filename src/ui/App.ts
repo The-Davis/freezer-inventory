@@ -18,6 +18,7 @@ export type ViewName =
   | 'remove-confirm';
 
 export interface NavParams {
+  freezerId?: string;
   shelfNumber?: number;
   itemId?: string;
   prefillItem?: FreezerItem;
@@ -28,13 +29,6 @@ interface NavEntry {
   params: NavParams;
 }
 
-/**
- * Central application controller.
- *
- * Manages a navigation history stack and mounts/unmounts view instances
- * inside the root container element. All views receive a reference to
- * this App instance so they can trigger navigation and access storage.
- */
 export class App {
   public readonly storage: IStorage;
   private container: HTMLElement;
@@ -45,30 +39,20 @@ export class App {
     this.storage = storage;
   }
 
-  /** Navigate to the home screen, clearing all history. */
   async showHome(): Promise<void> {
     await this.navigate('home', {}, true);
   }
 
-  /**
-   * Push a new view onto the navigation stack and render it.
-   * @param view         - The view name to mount.
-   * @param params       - Optional parameters for the view.
-   * @param clearHistory - If true, resets the navigation history first.
-   */
   async navigate(
     view: ViewName,
     params: NavParams = {},
     clearHistory = false
   ): Promise<void> {
-    if (clearHistory) {
-      this.history = [];
-    }
+    if (clearHistory) this.history = [];
     this.history.push({ view, params });
     await this.mountView(view, params);
   }
 
-  /** Pop the current view and restore the previous one. */
   async goBack(): Promise<void> {
     if (this.history.length > 1) {
       this.history.pop();
@@ -79,21 +63,15 @@ export class App {
     }
   }
 
-  /** True when there is a previous view to go back to. */
   canGoBack(): boolean {
     return this.history.length > 1;
   }
 
-  /**
-   * Entry point for QR code scans.
-   * Navigates directly to the remove-confirm screen.
-   */
   async handleQRRemove(id: string): Promise<void> {
     await this.navigate('remove-confirm', { itemId: id }, true);
   }
 
   private async mountView(view: ViewName, params: NavParams): Promise<void> {
-    // Clear container and apply entrance animation class
     this.container.innerHTML = '';
     this.container.className = 'view-container';
 
@@ -107,6 +85,7 @@ export class App {
         viewInstance = new ShelfView(
           this.container,
           this,
+          params.freezerId ?? '',
           params.shelfNumber ?? 1
         );
         break;
@@ -117,7 +96,8 @@ export class App {
         viewInstance = new StoreView(
           this.container,
           this,
-          params.prefillItem
+          params.prefillItem,
+          params.freezerId
         );
         break;
       case 'expiring':

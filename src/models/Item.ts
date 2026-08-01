@@ -1,13 +1,17 @@
+import { DEFAULT_FREEZER_ID } from './Freezer';
+
 export interface FreezerItem {
   id: string;
   name: string;
+  /** ID of the freezer this item is stored in. Defaults to the first freezer. */
+  freezerId: string;
   shelf: number;
   storedAt: string;        // ISO date-time string
   brand?: string;
   category?: string;
   weightOz?: number;
   volumeOz?: number;
-  expirationDate?: string; // YYYY-MM-DD date string
+  expirationDate?: string; // YYYY-MM-DD
   notes?: string;
 }
 
@@ -18,7 +22,6 @@ export function generateId(): string {
   ) {
     return crypto.randomUUID();
   }
-  // Fallback for environments without crypto.randomUUID
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -40,8 +43,14 @@ export const CATEGORIES: string[] = [
 ];
 
 /**
- * Returns the number of days until expiration (negative = already expired).
+ * Resolve an item's freezer ID.  Items saved before multi-freezer support
+ * was added may lack a freezerId; fall back to the default.
  */
+export function resolveFreezerId(item: Partial<FreezerItem>): string {
+  return item.freezerId ?? DEFAULT_FREEZER_ID;
+}
+
+/** Number of days until expiration (negative = already expired). */
 export function daysUntilExpiry(expirationDate: string): number {
   const exp = new Date(expirationDate + 'T00:00:00');
   const now = new Date();
@@ -51,13 +60,6 @@ export function daysUntilExpiry(expirationDate: string): number {
 
 export type ExpiryStatus = 'expired' | 'danger' | 'warning' | 'ok';
 
-/**
- * Returns a status code based on how soon the item expires.
- * expired  → already past expiration
- * danger   → within 3 days
- * warning  → within 14 days
- * ok       → more than 14 days away
- */
 export function expiryStatus(expirationDate: string): ExpiryStatus {
   const days = daysUntilExpiry(expirationDate);
   if (days < 0) return 'expired';
@@ -66,7 +68,6 @@ export function expiryStatus(expirationDate: string): ExpiryStatus {
   return 'ok';
 }
 
-/** Format an ISO date-time string for display (e.g. "Jul 31, 2026"). */
 export function formatStoredDate(isoString: string): string {
   const date = new Date(isoString);
   return date.toLocaleDateString('en-US', {
@@ -76,7 +77,6 @@ export function formatStoredDate(isoString: string): string {
   });
 }
 
-/** Format a YYYY-MM-DD date string for display (e.g. "Jul 31, 2026"). */
 export function formatExpiryDate(dateString: string): string {
   const date = new Date(dateString + 'T00:00:00');
   return date.toLocaleDateString('en-US', {

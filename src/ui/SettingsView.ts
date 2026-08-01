@@ -1,11 +1,14 @@
 import type { App } from './App';
-import { renderHeader, bindBackButton } from './common';
+import type { Freezer } from '../models/Freezer';
+import { createFreezer } from '../models/Freezer';
+import { esc, renderHeader, bindBackButton } from './common';
 
 const MIN_SHELVES = 1;
 const MAX_SHELVES = 20;
 
 export class SettingsView {
-  private shelfCount = 4;
+  private freezers: Freezer[] = [];
+  private itemCountMap = new Map<string, number>(); // freezerId → item count
 
   constructor(
     private container: HTMLElement,
@@ -13,46 +16,47 @@ export class SettingsView {
   ) {}
 
   async render(): Promise<void> {
-    const settings = await this.app.storage.getSettings();
-    this.shelfCount = settings.shelfCount;
+    const [settings, items] = await Promise.all([
+      this.app.storage.getSettings(),
+      this.app.storage.getItems(),
+    ]);
 
+    this.freezers = settings.freezers.map((f) => ({ ...f })); // shallow copy for editing
+
+    this.itemCountMap.clear();
+    for (const item of items) {
+      this.itemCountMap.set(
+        item.freezerId,
+        (this.itemCountMap.get(item.freezerId) ?? 0) + 1
+      );
+    }
+
+    this.mount();
+  }
+
+  private mount(): void {
     this.container.innerHTML = `
       <div class="view settings-view">
         ${renderHeader('Settings', this.app)}
-
         <div class="scroll-view">
-          <div class="settings-section">
-            <div class="settings-label">Freezer Configuration</div>
 
-            <div class="settings-row">
-              <div>
-                <div class="settings-description">Number of Shelves</div>
-                <div class="form-hint" style="margin-top:2px">
-                  ${MIN_SHELVES}–${MAX_SHELVES} shelves supported
-                </div>
-              </div>
-              <div class="number-stepper">
-                <button
-                  class="stepper-btn"
-                  id="dec-btn"
-                  aria-label="Decrease shelf count"
-                  ${this.shelfCount <= MIN_SHELVES ? 'disabled' : ''}
-                >−</button>
-                <span class="stepper-value" id="shelf-value">${this.shelfCount}</span>
-                <button
-                  class="stepper-btn"
-                  id="inc-btn"
-                  aria-label="Increase shelf count"
-                  ${this.shelfCount >= MAX_SHELVES ? 'disabled' : ''}
-                >+</button>
-              </div>
+          <!-- Freezer list -->
+          <div class="settings-section">
+            <div class="settings-label">Freezers</div>
+            <div id="freezer-list">
+              ${this.freezers.map((f, idx) => this.renderFreezerRow(f, idx)).join('')}
             </div>
+            <button class="btn btn-secondary" id="add-freezer-btn"
+                    style="margin-top:12px;width:100%">
+              ＋ Add Freezer
+            </button>
           </div>
 
+          <!-- About -->
           <div class="settings-section">
             <div class="settings-label">About</div>
             <p class="form-hint" style="line-height:1.6">
-              Freezer Inventory tracks what's in your freezer using browser
+              Freezer Inventory tracks what's in your freezers using browser
               storage or a local network server. Scan the QR code on a stored
               item to remove it instantly.
             </p>
@@ -64,9 +68,8 @@ export class SettingsView {
             </button>
           </div>
 
-          <div class="save-feedback hidden" id="save-feedback">
-            ✅ Settings saved!
-          </div>
+          <div class="save-feedback hidden" id="save-feedback">✅ Settings saved!</div>
+          <div class="form-error hidden" id="save-error" style="margin:0 16px 16px"></div>
         </div>
       </div>
     `;
@@ -75,43 +78,149 @@ export class SettingsView {
     this.bindListeners();
   }
 
+  private renderFreezerRow(freezer: Freezer, idx: number): string {
+    const itemCount = this.itemCountMap.get(freezer.id) ?? 0;
+    const canDelete = this.freezers.length > 1 && itemCount === 0;
+    const deleteHint = this.freezers.length <= 1
+      ? 'At least one freezer required'
+      : itemCount > 0
+        ? `${itemCount} item${itemCount !== 1 ? 's' : ''} — remove them first`
+        : '';
+
+    return `
+      <div class="freezer-settings-row" id="freezer-row-${idx}">
+        <div class="freezer-settings-name-row">
+          <input type="text"
+                 class="form-input freezer-name-input"
+                 id="freezer-name-${idx}"
+                 value="${esc(freezer.name)}"
+                 placeholder="Freezer name"
+                 aria-label="Freezer name">
+          <button class="btn btn-danger btn-sm delete-freezer-btn"
+                  id="delete-freezer-${idx}"
+                  data-idx="${idx}"
+                  ${canDelete ? '' : 'disabled'}
+                  title="${esc(deleteHint)}">
+            ✕
+          </button>
+        </div>
+        <div class="settings-row" style="margin-top:8px">
+          <div>
+            <div class="settings-description">Shelves</div>
+            ${deleteHint && !canDelete
+              ? `<div class="form-hint" style="margin-top:2px">${esc(deleteHint)}</div>`
+              : ''}
+          </div>
+          <div class="number-stepper">
+            <button class="stepper-btn dec-shelf-btn"
+                    data-idx="${idx}"
+                    ${freezer.shelfCount <= MIN_SHELVES ? 'disabled' : ''}>−</button>
+            <span class="stepper-value" id="shelf-val-${idx}">${freezer.shelfCount}</span>
+            <button class="stepper-btn inc-shelf-btn"
+                    data-idx="${idx}"
+                    ${freezer.shelfCount >= MAX_SHELVES ? 'disabled' : ''}>+</button>
+          </div>
+        </div>
+      </div>
+      ${idx < this.freezers.length - 1 ? '<hr class="freezer-divider">' : ''}
+    `;
+  }
+
   private bindListeners(): void {
-    const valueEl = document.getElementById('shelf-value')!;
-    const decBtn = document.getElementById('dec-btn') as HTMLButtonElement;
-    const incBtn = document.getElementById('inc-btn') as HTMLButtonElement;
-
-    const update = (): void => {
-      valueEl.textContent = String(this.shelfCount);
-      decBtn.disabled = this.shelfCount <= MIN_SHELVES;
-      incBtn.disabled = this.shelfCount >= MAX_SHELVES;
-    };
-
-    decBtn.addEventListener('click', () => {
-      if (this.shelfCount > MIN_SHELVES) {
-        this.shelfCount--;
-        update();
-      }
-    });
-
-    incBtn.addEventListener('click', () => {
-      if (this.shelfCount < MAX_SHELVES) {
-        this.shelfCount++;
-        update();
-      }
+    document.getElementById('add-freezer-btn')?.addEventListener('click', () => {
+      this.freezers.push(createFreezer(`Freezer ${this.freezers.length + 1}`));
+      this.remountList();
     });
 
     document.getElementById('save-btn')?.addEventListener('click', () => {
       void this.save();
     });
+
+    this.bindListItemListeners();
+  }
+
+  private bindListItemListeners(): void {
+    const list = document.getElementById('freezer-list');
+    if (!list) return;
+
+    // Name input changes
+    list.querySelectorAll<HTMLInputElement>('.freezer-name-input').forEach((input, idx) => {
+      input.addEventListener('input', () => {
+        if (this.freezers[idx]) this.freezers[idx]!.name = input.value;
+      });
+    });
+
+    // Shelf steppers
+    list.querySelectorAll<HTMLButtonElement>('.dec-shelf-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset['idx'] ?? '0', 10);
+        const f = this.freezers[idx];
+        if (f && f.shelfCount > MIN_SHELVES) {
+          f.shelfCount--;
+          this.remountList();
+        }
+      });
+    });
+
+    list.querySelectorAll<HTMLButtonElement>('.inc-shelf-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset['idx'] ?? '0', 10);
+        const f = this.freezers[idx];
+        if (f && f.shelfCount < MAX_SHELVES) {
+          f.shelfCount++;
+          this.remountList();
+        }
+      });
+    });
+
+    // Delete buttons
+    list.querySelectorAll<HTMLButtonElement>('.delete-freezer-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset['idx'] ?? '0', 10);
+        this.freezers.splice(idx, 1);
+        this.remountList();
+      });
+    });
+  }
+
+  /** Re-render just the freezer list (names etc stay, only list changes). */
+  private remountList(): void {
+    // Capture current name inputs before wiping
+    this.freezers.forEach((f, idx) => {
+      const nameInput = document.getElementById(`freezer-name-${idx}`) as HTMLInputElement | null;
+      if (nameInput) f.name = nameInput.value;
+    });
+
+    const listEl = document.getElementById('freezer-list');
+    if (listEl) {
+      listEl.innerHTML = this.freezers.map((f, idx) => this.renderFreezerRow(f, idx)).join('');
+      this.bindListItemListeners();
+    }
   }
 
   private async save(): Promise<void> {
-    await this.app.storage.saveSettings({ shelfCount: this.shelfCount });
-    const feedback = document.getElementById('save-feedback');
-    if (feedback) {
-      feedback.classList.remove('hidden');
-      setTimeout(() => feedback.classList.add('hidden'), 2000);
+    // Collect current name values from inputs
+    this.freezers.forEach((f, idx) => {
+      const nameInput = document.getElementById(`freezer-name-${idx}`) as HTMLInputElement | null;
+      if (nameInput) f.name = nameInput.value.trim() || f.name;
+    });
+
+    const errorEl   = document.getElementById('save-error')!;
+    const feedbackEl = document.getElementById('save-feedback')!;
+
+    // Validate — all names must be non-empty
+    const unnamed = this.freezers.findIndex((f) => !f.name.trim());
+    if (unnamed >= 0) {
+      errorEl.textContent = `Freezer ${unnamed + 1} needs a name.`;
+      errorEl.classList.remove('hidden');
+      return;
     }
+    errorEl.classList.add('hidden');
+
+    await this.app.storage.saveSettings({ freezers: this.freezers });
+
+    feedbackEl.classList.remove('hidden');
+    setTimeout(() => feedbackEl.classList.add('hidden'), 2000);
   }
 
   destroy(): void {}

@@ -6,6 +6,7 @@ import {
   formatExpiryDate,
   daysUntilExpiry,
 } from '../models/Item';
+import type { Freezer } from '../models/Freezer';
 import {
   esc,
   renderHeader,
@@ -17,7 +18,7 @@ import {
 
 export class FindView {
   private allItems: FreezerItem[] = [];
-  private shelfCount = 4;
+  private freezers: Freezer[] = [];
   private selectedId: string | null = null;
   private query = '';
 
@@ -33,27 +34,19 @@ export class FindView {
     ]);
 
     this.allItems = items;
-    this.shelfCount = settings.shelfCount;
+    this.freezers = settings.freezers;
 
     this.container.innerHTML = `
       <div class="view find-view">
         ${renderHeader('Find Item', this.app)}
-
         <div class="search-container">
           <div class="search-input-wrapper">
             <span class="search-icon">${ICON_SEARCH}</span>
-            <input
-              type="search"
-              class="search-input"
-              id="search-input"
+            <input type="search" class="search-input" id="search-input"
               placeholder="Search by name, brand, category…"
-              autocomplete="off"
-              autocorrect="off"
-              spellcheck="false"
-            >
+              autocomplete="off" autocorrect="off" spellcheck="false">
           </div>
         </div>
-
         <div class="scroll-view" id="results-wrapper">
           ${this.renderResults()}
         </div>
@@ -64,7 +57,6 @@ export class FindView {
 
     const searchEl = document.getElementById('search-input') as HTMLInputElement;
     searchEl.focus();
-
     searchEl.addEventListener('input', () => {
       this.query = searchEl.value.trim().toLowerCase();
       this.selectedId = null;
@@ -74,19 +66,18 @@ export class FindView {
     this.bindResultListeners();
   }
 
+  private freezerName(freezerId: string): string {
+    return this.freezers.find((f) => f.id === freezerId)?.name ?? 'Unknown Freezer';
+  }
+
   private filterItems(): FreezerItem[] {
     if (!this.query) return [...this.allItems];
-    return this.allItems.filter((item) => {
-      const haystack = [
-        item.name,
-        item.brand ?? '',
-        item.category ?? '',
-        item.notes ?? '',
-      ]
+    return this.allItems.filter((item) =>
+      [item.name, item.brand ?? '', item.category ?? '', item.notes ?? '']
         .join(' ')
-        .toLowerCase();
-      return haystack.includes(this.query);
-    });
+        .toLowerCase()
+        .includes(this.query)
+    );
   }
 
   private renderResults(): string {
@@ -95,10 +86,8 @@ export class FindView {
     if (this.allItems.length === 0) {
       return `<div class="empty-state">
         <div class="empty-icon">🧊</div>
-        <div class="empty-title">Freezer is empty</div>
-        <div class="empty-description">
-          Use <strong>Store</strong> to add items first.
-        </div>
+        <div class="empty-title">All freezers are empty</div>
+        <div class="empty-description">Use <strong>Store</strong> to add items first.</div>
       </div>`;
     }
 
@@ -117,44 +106,38 @@ export class FindView {
 
   private renderCard(item: FreezerItem): string {
     const isSelected = this.selectedId === item.id;
-    const expiryTag = item.expirationDate
-      ? this.renderExpiryTag(item.expirationDate)
-      : '';
+    const expiryTag   = item.expirationDate ? this.renderExpiryTag(item.expirationDate) : '';
     const categoryTag = item.category
-      ? `<span class="tag category-tag">${esc(item.category)}</span>`
-      : '';
-    const shelfTag = `<span class="tag shelf-tag">Shelf ${item.shelf}</span>`;
-    const dateTag = `<span class="tag date-tag">Stored ${formatStoredDate(item.storedAt)}</span>`;
+      ? `<span class="tag category-tag">${esc(item.category)}</span>` : '';
+    const freezerTag  = `<span class="tag freezer-tag">${esc(this.freezerName(item.freezerId))}</span>`;
+    const shelfTag    = `<span class="tag shelf-tag">Shelf ${item.shelf}</span>`;
+    const dateTag     = `<span class="tag date-tag">Stored ${formatStoredDate(item.storedAt)}</span>`;
 
     return `
       <div class="item-card ${isSelected ? 'selected' : ''} ${this.expiryCardClass(item)}"
-           id="card-${item.id}"
-           data-id="${item.id}"
-           role="button"
-           tabindex="0">
+           id="card-${item.id}" data-id="${item.id}" role="button" tabindex="0">
         <div class="item-name">${esc(item.name)}</div>
-        <div class="item-meta">
-          ${shelfTag}${categoryTag}${dateTag}${expiryTag}
-        </div>
+        <div class="item-meta">${freezerTag}${shelfTag}${categoryTag}${dateTag}${expiryTag}</div>
         ${isSelected ? this.renderExpanded(item) : ''}
       </div>
     `;
   }
 
   private renderExpanded(item: FreezerItem): string {
+    // Move targets: all shelves in all freezers excluding current location
+    const hasTargets = this.freezers.some((f) =>
+      Array.from({ length: f.shelfCount }, (_, i) => i + 1).some(
+        (s) => !(f.id === item.freezerId && s === item.shelf)
+      )
+    );
+
     return `
       <div class="item-actions">
         <div class="action-row" id="action-row-${item.id}">
-          <button class="btn btn-danger btn-sm" id="remove-btn-${item.id}">
-            Remove
-          </button>
-          ${
-            this.shelfCount > 1
-              ? `<button class="btn btn-secondary btn-sm" id="move-btn-${item.id}">
-                   Move to Shelf…
-                 </button>`
-              : ''
-          }
+          <button class="btn btn-danger btn-sm" id="remove-btn-${item.id}">Remove</button>
+          ${hasTargets
+            ? `<button class="btn btn-secondary btn-sm" id="move-btn-${item.id}">Move…</button>`
+            : ''}
         </div>
         <div class="remove-confirm-inline hidden" id="confirm-${item.id}">
           <span class="confirm-inline-text">Remove from freezer?</span>
@@ -167,10 +150,10 @@ export class FindView {
 
   private renderExpiryTag(expirationDate: string): string {
     const status = expiryStatus(expirationDate);
-    const days = daysUntilExpiry(expirationDate);
+    const days   = daysUntilExpiry(expirationDate);
     const dateStr = formatExpiryDate(expirationDate);
     if (status === 'expired') return `<span class="tag expiry-danger">Expired ${dateStr}</span>`;
-    if (status === 'danger') return `<span class="tag expiry-danger">Exp in ${days}d</span>`;
+    if (status === 'danger')  return `<span class="tag expiry-danger">Exp in ${days}d</span>`;
     if (status === 'warning') return `<span class="tag expiry-warning">Exp in ${days}d</span>`;
     return `<span class="tag date-tag">Exp ${dateStr}</span>`;
   }
@@ -185,23 +168,20 @@ export class FindView {
 
   private refreshResults(): void {
     const wrapper = document.getElementById('results-wrapper');
-    if (!wrapper) return;
-    wrapper.innerHTML = this.renderResults();
-    this.bindResultListeners();
+    if (wrapper) {
+      wrapper.innerHTML = this.renderResults();
+      this.bindResultListeners();
+    }
   }
 
   private bindResultListeners(): void {
-    const resultsEl = document.getElementById('find-results');
-    if (!resultsEl) return;
+    const el = document.getElementById('find-results');
+    if (!el) return;
 
-    resultsEl.addEventListener('click', (e) => {
+    el.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
       const btn = target.closest('button') as HTMLButtonElement | null;
-
-      if (btn) {
-        this.handleButtonClick(btn);
-        return;
-      }
+      if (btn) { this.handleButton(btn); return; }
 
       const card = target.closest<HTMLElement>('[data-id]');
       if (card) {
@@ -212,46 +192,34 @@ export class FindView {
     });
   }
 
-  private handleButtonClick(btn: HTMLButtonElement): void {
+  private handleButton(btn: HTMLButtonElement): void {
     const { id } = btn;
-
     if (id.startsWith('remove-btn-')) {
       const itemId = id.replace('remove-btn-', '');
-      const actionRow = document.getElementById(`action-row-${itemId}`);
-      const confirmRow = document.getElementById(`confirm-${itemId}`);
-      actionRow?.classList.add('hidden');
-      confirmRow?.classList.remove('hidden');
+      document.getElementById(`action-row-${itemId}`)?.classList.add('hidden');
+      document.getElementById(`confirm-${itemId}`)?.classList.remove('hidden');
       return;
     }
-
     if (id.startsWith('confirm-yes-')) {
-      const itemId = id.replace('confirm-yes-', '');
-      void this.removeItem(itemId);
+      void this.removeItem(id.replace('confirm-yes-', ''));
       return;
     }
-
     if (id.startsWith('confirm-no-')) {
       const itemId = id.replace('confirm-no-', '');
-      const actionRow = document.getElementById(`action-row-${itemId}`);
-      const confirmRow = document.getElementById(`confirm-${itemId}`);
-      actionRow?.classList.remove('hidden');
-      confirmRow?.classList.add('hidden');
+      document.getElementById(`action-row-${itemId}`)?.classList.remove('hidden');
+      document.getElementById(`confirm-${itemId}`)?.classList.add('hidden');
       return;
     }
-
     if (id.startsWith('move-btn-')) {
-      const itemId = id.replace('move-btn-', '');
-      void this.showMoveModal(itemId);
+      void this.showMoveModal(id.replace('move-btn-', ''));
     }
   }
 
   private async removeItem(itemId: string): Promise<void> {
     const item = this.allItems.find((i) => i.id === itemId);
     if (!item) return;
-
     await this.app.storage.removeItem(itemId);
     await this.app.storage.saveRecentlyRemoved(item);
-
     this.allItems = this.allItems.filter((i) => i.id !== itemId);
     this.selectedId = null;
     this.refreshResults();
@@ -261,10 +229,24 @@ export class FindView {
     const item = this.allItems.find((i) => i.id === itemId);
     if (!item) return;
 
-    const shelves = Array.from(
-      { length: this.shelfCount },
-      (_, i) => i + 1
-    ).filter((n) => n !== item.shelf);
+    const groups = this.freezers.map((f) => ({
+      freezer: f,
+      shelves: Array.from({ length: f.shelfCount }, (_, i) => i + 1).filter(
+        (s) => !(f.id === item.freezerId && s === item.shelf)
+      ),
+    })).filter((g) => g.shelves.length > 0);
+
+    const groupHtml = groups.map((g) => `
+      <div class="move-group">
+        <div class="move-group-label">${esc(g.freezer.name)}</div>
+        ${g.shelves.map((s) => `
+          <button class="shelf-option"
+                  data-freezer="${esc(g.freezer.id)}"
+                  data-shelf="${s}">
+            Shelf ${s} <span>›</span>
+          </button>`).join('')}
+      </div>
+    `).join('');
 
     const overlay = showModal(`
       <div class="modal-sheet">
@@ -273,19 +255,8 @@ export class FindView {
           <div class="modal-title">Move "${esc(item.name)}" to…</div>
         </div>
         <div class="modal-body">
-          <div class="shelf-select-list">
-            ${shelves
-              .map(
-                (n) =>
-                  `<button class="shelf-option" data-shelf="${n}">
-                     Shelf ${n} <span>›</span>
-                   </button>`
-              )
-              .join('')}
-          </div>
-          <button class="btn btn-secondary" id="modal-cancel" style="width:100%;margin-top:12px">
-            Cancel
-          </button>
+          <div class="shelf-select-list">${groupHtml}</div>
+          <button class="btn btn-secondary" id="modal-cancel" style="width:100%;margin-top:12px">Cancel</button>
         </div>
       </div>
     `);
@@ -293,29 +264,24 @@ export class FindView {
     overlay.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null;
       if (!btn) return;
-
-      if (btn.id === 'modal-cancel') {
-        removeModal(overlay);
-        return;
-      }
-
-      const shelfStr = btn.dataset['shelf'];
-      if (shelfStr) {
-        const newShelf = parseInt(shelfStr, 10);
-        void this.moveItem(item, newShelf, overlay);
-      }
+      if (btn.id === 'modal-cancel') { removeModal(overlay); return; }
+      const newFreezerId = btn.dataset['freezer'];
+      const newShelf     = parseInt(btn.dataset['shelf'] ?? '1', 10);
+      if (newFreezerId) void this.moveItem(item, newFreezerId, newShelf, overlay);
     });
   }
 
   private async moveItem(
     item: FreezerItem,
+    newFreezerId: string,
     newShelf: number,
     overlay: HTMLElement
   ): Promise<void> {
     removeModal(overlay);
-    await this.app.storage.updateItem({ ...item, shelf: newShelf });
+    const updated = { ...item, freezerId: newFreezerId, shelf: newShelf };
+    await this.app.storage.updateItem(updated);
     const idx = this.allItems.findIndex((i) => i.id === item.id);
-    if (idx >= 0) this.allItems[idx] = { ...item, shelf: newShelf };
+    if (idx >= 0) this.allItems[idx] = updated;
     this.selectedId = null;
     this.refreshResults();
   }

@@ -20,18 +20,30 @@ as you take them out of the freezer.
 
 ## Quick Start — GitHub Pages (static, no server)
 
-1. Fork / clone this repository.
-2. Install dependencies and build:
-   ```bash
-   npm install
-   npm run build
-   ```
-3. Commit the `dist/` folder and push to `main`.
-4. In your repository settings → **Pages**, set the source to
-   **Branch: main / folder: /dist**.
-5. Open `https://<your-username>.github.io/freezer-inventory/`.
+> [!IMPORTANT]
+> GitHub Pages cannot serve directly from a `/dist` subfolder in classic
+> "branch + folder" mode (only `/` or `/docs` are supported).
+> This repository ships a **GitHub Actions workflow** that builds and deploys
+> `dist/` automatically — no manual configuration of the dist folder needed.
+
+### One-time setup
+
+1. Fork / clone this repository and push it to GitHub.
+2. Go to **Settings → Pages** and set **Source** to **GitHub Actions**.
+3. That's it — push to `main` and the workflow runs automatically.
+
+The deployed URL will be:
+`https://<your-username>.github.io/freezer-inventory/`
 
 Data is stored in the browser's `localStorage` — no server required.
+
+### Manual build (local preview)
+
+```bash
+npm install
+npm run build
+# Open dist/index.html in a browser, or serve with any static server
+```
 
 ---
 
