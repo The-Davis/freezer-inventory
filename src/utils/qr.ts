@@ -1,4 +1,6 @@
 import QRCode from 'qrcode';
+import type { FreezerItem } from '../models/Item';
+import { formatStoredDate, formatExpiryDate } from '../models/Item';
 
 /**
  * Generate an SVG string for a QR code that encodes the given URL.
@@ -35,8 +37,7 @@ export function buildRemoveUrl(itemId: string): string {
  */
 export function printQRCode(
   svgContent: string,
-  itemName: string,
-  itemId: string
+  item: FreezerItem
 ): void {
   const win = window.open('', '_blank', 'width=420,height=480,menubar=no');
   if (!win) {
@@ -44,7 +45,9 @@ export function printQRCode(
     return;
   }
 
-  const escapedName = itemName.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const escapedName = item.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const storedStr = formatStoredDate(item.storedAt);
+  const expiryStr = item.expirationDate ? formatExpiryDate(item.expirationDate) : '';
 
   win.document.write(`<!DOCTYPE html>
 <html lang="en">
@@ -72,6 +75,11 @@ export function printQRCode(
       border-radius: 8px;
     }
     .qr-wrap svg { display: block; }
+    .item-meta {
+      margin-top: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
     .item-id {
       margin-top: 10px;
       font-size: 9px;
@@ -92,8 +100,12 @@ export function printQRCode(
 <body>
   <h2>${escapedName}</h2>
   <div class="qr-wrap">${svgContent}</div>
+  <div class="item-meta">
+    <div><strong>Stored:</strong> ${storedStr}</div>
+    ${expiryStr ? `<div><strong>Expires:</strong> ${expiryStr}</div>` : ''}
+  </div>
   <p class="scan-hint">Scan to remove from inventory</p>
-  <p class="item-id">ID: ${itemId}</p>
+  <p class="item-id">ID: ${item.id}</p>
   <script>window.onload = function() { window.print(); };<\/script>
 </body>
 </html>`);
