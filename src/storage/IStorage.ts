@@ -7,6 +7,13 @@ export interface AppSettings {
   freezers: Freezer[];
 }
 
+export interface AppState {
+  version: number;
+  settings: AppSettings;
+  items: FreezerItem[];
+  recent: FreezerItem | null;
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   freezers: [DEFAULT_FREEZER],
 };
@@ -24,4 +31,6 @@ export interface IStorage {
   saveSettings(settings: AppSettings): Promise<void>;
   getRecentlyRemoved(): Promise<FreezerItem | null>;
   saveRecentlyRemoved(item: FreezerItem | null): Promise<void>;
+  exportState(): Promise<AppState>;
+  importState(state: AppState): Promise<void>;
 }

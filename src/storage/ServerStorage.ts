@@ -1,5 +1,5 @@
 import type { FreezerItem } from '../models/Item';
-import { type IStorage, type AppSettings } from './IStorage';
+import { type IStorage, type AppSettings, type AppState } from './IStorage';
 
 const BASE = '/api';
 
@@ -65,6 +65,17 @@ export class ServerStorageAdapter implements IStorage {
     return request<void>('/recent', {
       method: 'PUT',
       body: JSON.stringify(item),
+    });
+  }
+
+  async exportState(): Promise<AppState> {
+    return request<AppState>('/state');
+  }
+
+  async importState(state: AppState): Promise<void> {
+    return request<void>('/state', {
+      method: 'PUT',
+      body: JSON.stringify(state),
     });
   }
 }
