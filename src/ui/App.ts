@@ -22,6 +22,7 @@ export interface NavParams {
   shelfNumber?: number;
   itemId?: string;
   prefillItem?: FreezerItem;
+  isEdit?: boolean;
 }
 
 interface NavEntry {
@@ -97,7 +98,8 @@ export class App {
           this.container,
           this,
           params.prefillItem,
-          params.freezerId
+          params.freezerId,
+          params.isEdit
         );
         break;
       case 'expiring':

@@ -2,8 +2,8 @@ import type { App } from './App';
 import type { FreezerItem } from '../models/Item';
 import { generateId, CATEGORIES } from '../models/Item';
 import type { Freezer } from '../models/Freezer';
-import { esc, renderHeader, bindBackButton, showModal, removeModal } from './common';
-import { generateQRCodeSVG, buildRemoveUrl, printQRCode } from '../utils/qr';
+import { esc, renderHeader, bindBackButton } from './common';
+import { showPrintModal } from './qrModal';
 
 export class StoreView {
   private freezers: Freezer[] = [];
@@ -15,7 +15,8 @@ export class StoreView {
     private container: HTMLElement,
     private app: App,
     private prefillItem?: FreezerItem,
-    private initialFreezerId?: string
+    private initialFreezerId?: string,
+    private isEdit = false
   ) {}
 
   async render(): Promise<void> {
@@ -40,7 +41,9 @@ export class StoreView {
       this.selectedFreezerId = firstFreezer.id;
     }
 
-    const title = this.prefillItem ? 'Re-store Item' : 'Store Item';
+    let title = 'Store Item';
+    if (this.isEdit) title = 'Edit Item';
+    else if (this.prefillItem) title = 'Duplicate Item';
 
     this.container.innerHTML = `
       <div class="view store-view">
@@ -134,7 +137,7 @@ export class StoreView {
             <div class="form-error hidden" id="form-error"></div>
 
             <button type="submit" class="btn btn-primary btn-lg" id="save-btn">
-              Save &amp; Generate QR Code
+              ${this.isEdit ? 'Update &amp; Generate QR Code' : 'Save &amp; Generate QR Code'}
             </button>
           </form>
         </div>
@@ -241,12 +244,13 @@ export class StoreView {
     saveBtn.disabled    = true;
     saveBtn.textContent = 'Saving…';
 
+    const isUpdating = this.isEdit && !!this.prefillItem;
     const item: FreezerItem = {
-      id:             generateId(),
+      id:             isUpdating ? this.prefillItem!.id : generateId(),
       name,
       freezerId:      this.selectedFreezerId,
       shelf:          this.selectedShelf,
-      storedAt:       new Date().toISOString(),
+      storedAt:       isUpdating ? this.prefillItem!.storedAt : new Date().toISOString(),
       brand:          brandEl.value.trim() || undefined,
       category:       this.selectedCategory || undefined,
       weightOz:       weightEl.value !== '' ? parseFloat(weightEl.value) : undefined,
@@ -256,57 +260,31 @@ export class StoreView {
     };
 
     try {
-      await this.app.storage.saveItem(item);
+      if (isUpdating) {
+        await this.app.storage.updateItem(item);
+      } else {
+        await this.app.storage.saveItem(item);
+      }
+      
       // Clear recently removed if this is a re-store of the same item
       const recent = await this.app.storage.getRecentlyRemoved();
-      if (recent && recent.name === item.name) {
+      if (!isUpdating && recent && recent.name === item.name) {
         await this.app.storage.saveRecentlyRemoved(null);
       }
       await this.showQRModal(item);
     } catch (err) {
       saveBtn.disabled    = false;
-      saveBtn.textContent = 'Save & Generate QR Code';
+      saveBtn.textContent = this.isEdit ? 'Update & Generate QR Code' : 'Save & Generate QR Code';
       errorEl.textContent = `Failed to save: ${err instanceof Error ? err.message : 'Unknown error'}`;
       errorEl.classList.remove('hidden');
     }
   }
 
   private async showQRModal(item: FreezerItem): Promise<void> {
-    const url = buildRemoveUrl(item.id);
-    let svgContent: string;
-    try {
-      svgContent = await generateQRCodeSVG(url);
-    } catch {
-      svgContent = '<p style="color:#f87171">QR generation failed</p>';
-    }
-
     const freezerName = this.freezers.find((f) => f.id === item.freezerId)?.name ?? '';
-
-    const overlay = showModal(`
-      <div class="modal-sheet">
-        <div class="modal-handle"></div>
-        <div class="modal-header"><div class="modal-title">✅ Stored!</div></div>
-        <div class="modal-body">
-          <div class="qr-container">
-            <div class="qr-item-name">${esc(item.name)}</div>
-            <div class="qr-shelf-label">${esc(freezerName)} — Shelf ${item.shelf}</div>
-            <div class="qr-frame">${svgContent}</div>
-            <p class="qr-hint">Scan this label to remove the item when you take it out.</p>
-            <div class="qr-id">ID: ${item.id}</div>
-            <div class="qr-actions">
-              <button class="btn btn-secondary" id="qr-print-btn">🖨 Print Label</button>
-              <button class="btn btn-primary"   id="qr-done-btn">Done</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `);
-
-    document.getElementById('qr-print-btn')?.addEventListener('click', () =>
-      printQRCode(svgContent, item.name, item.id)
-    );
-    document.getElementById('qr-done-btn')?.addEventListener('click', () => {
-      removeModal(overlay);
+    const headerText = this.isEdit ? '✅ Updated!' : '✅ Stored!';
+    
+    await showPrintModal(item, freezerName, headerText, () => {
       void this.app.showHome();
     });
   }
