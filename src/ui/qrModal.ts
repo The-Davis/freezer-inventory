@@ -37,7 +37,7 @@ export async function showPrintModal(
   `);
 
   document.getElementById('qr-print-btn')?.addEventListener('click', () =>
-    printQRCode(svgContent, item.name, item.id)
+    printQRCode(svgContent, item)
   );
   document.getElementById('qr-done-btn')?.addEventListener('click', () => {
     removeModal(overlay);
