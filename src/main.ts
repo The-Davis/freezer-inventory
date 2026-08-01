@@ -28,7 +28,7 @@ async function init(): Promise<void> {
 
 document.addEventListener('DOMContentLoaded', () => {
   init().catch((err: unknown) => {
-    console.error('Failed to initialise Freezer Inventory:', err);
+    console.error('Failed to initialise My Inventory:', err);
     const appEl = document.getElementById('app');
     if (appEl) {
       appEl.innerHTML = `
@@ -36,12 +36,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     justify-content:center;height:100vh;gap:12px;padding:24px;text-align:center;">
           <div style="font-size:40px">⚠️</div>
           <div style="font-size:16px;font-weight:600;color:#f0f6ff;">
-            Failed to load Freezer Inventory
+            Failed to load My Inventory
           </div>
-          <div style="font-size:13px;color:rgba(180,215,255,0.6);">
+          <div style="font-size:13px;color:rgba(180,215,255,0.6);margin-bottom:12px;">
             ${err instanceof Error ? err.message : 'Unknown error'}
           </div>
+          <p style="font-size:13px;color:rgba(180,215,255,0.8);max-width:300px;">
+            This may be due to a corrupt or outdated storage version.
+          </p>
+          <button id="reset-app-btn" class="btn btn-danger" style="margin-top:8px;">Wipe Data & Reset</button>
         </div>`;
+
+      document.getElementById('reset-app-btn')?.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to completely wipe all inventory data and settings? This cannot be undone.')) {
+          return;
+        }
+
+        try {
+          if (SERVER_MODE) {
+            await fetch('/api/state', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                settings: { freezers: [{ id: 'f_default', name: 'Container 1', shelfCount: 4, icon: 'snowflake' }] },
+                items: [],
+                recent: null
+              })
+            });
+          } else {
+            localStorage.clear();
+          }
+          window.location.href = window.location.pathname; // Reload without query params
+        } catch (e) {
+          alert('Failed to reset data. You may need to manually clear your browser storage or delete the server data file.');
+        }
+      });
     }
   });
 });

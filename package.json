@@ -2,12 +2,12 @@
   "name": "freezer-inventory",
   "version": "1.0.0",
   "description": "A mobile-first freezer inventory tracker with QR code labels",
-  "main": "server/index.js",
+  "main": "server-dist/index.js",
   "scripts": {
     "build": "node scripts/build.js",
     "build:server": "node scripts/build.js --server && tsc --project tsconfig.server.json",
     "dev": "ts-node server/index.ts",
-    "start": "node server/index.js",
+    "start": "node server-dist/index.js",
     "typecheck": "tsc --noEmit",
     "typecheck:server": "tsc --project tsconfig.server.json --noEmit"
   },
