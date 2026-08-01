@@ -23,7 +23,11 @@ function safeParseJSON<T>(raw: string | null, fallback: T): T {
 function migrateSettings(raw: Record<string, unknown>): AppSettings {
   // New format — already has freezers array
   if (Array.isArray(raw['freezers']) && raw['freezers'].length > 0) {
-    return { freezers: raw['freezers'] as AppSettings['freezers'] };
+    return { 
+      appTitle: typeof raw['appTitle'] === 'string' ? raw['appTitle'] : undefined,
+      appIcon: typeof raw['appIcon'] === 'string' ? raw['appIcon'] : undefined,
+      freezers: raw['freezers'] as AppSettings['freezers'] 
+    };
   }
 
   // Old format — has shelfCount, create a single default freezer

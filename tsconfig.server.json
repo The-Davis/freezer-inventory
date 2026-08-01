@@ -8,7 +8,7 @@
     "skipLibCheck": true,
     "noEmit": false,
     "outDir": "server-dist",
-    "rootDir": ".",
+    "rootDir": "server",
     "esModuleInterop": true
   },
   "include": ["server/**/*"]
