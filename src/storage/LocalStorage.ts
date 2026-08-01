@@ -1,7 +1,7 @@
 import type { FreezerItem } from '../models/Item';
 import { resolveFreezerId } from '../models/Item';
 import { DEFAULT_FREEZER_ID, DEFAULT_FREEZER } from '../models/Freezer';
-import { type IStorage, type AppSettings, DEFAULT_SETTINGS } from './IStorage';
+import { type IStorage, type AppSettings, type AppState, DEFAULT_SETTINGS } from './IStorage';
 
 const ITEMS_KEY    = 'fi_items_v1';
 const SETTINGS_KEY = 'fi_settings_v1';
@@ -109,5 +109,22 @@ export class LocalStorageAdapter implements IStorage {
     } else {
       localStorage.setItem(RECENT_KEY, JSON.stringify(item));
     }
+  }
+
+  async exportState(): Promise<AppState> {
+    const [settings, items, recent] = await Promise.all([
+      this.getSettings(),
+      this.getItems(),
+      this.getRecentlyRemoved(),
+    ]);
+    return { version: 1, settings, items, recent };
+  }
+
+  async importState(state: AppState): Promise<void> {
+    await Promise.all([
+      this.saveSettings(state.settings),
+      this.setItems(state.items),
+      this.saveRecentlyRemoved(state.recent),
+    ]);
   }
 }

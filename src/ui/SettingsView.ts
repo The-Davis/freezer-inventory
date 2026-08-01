@@ -1,5 +1,6 @@
 import type { App } from './App';
 import type { Freezer } from '../models/Freezer';
+import type { AppState } from '../storage/IStorage';
 import { createFreezer } from '../models/Freezer';
 import { esc, renderHeader, bindBackButton } from './common';
 
@@ -50,6 +51,19 @@ export class SettingsView {
                     style="margin-top:12px;width:100%">
               ＋ Add Freezer
             </button>
+          </div>
+
+          <!-- Backup / Restore -->
+          <div class="settings-section">
+            <div class="settings-label">Backup & Restore</div>
+            <div class="settings-row" style="justify-content: flex-start; gap: 12px">
+              <button class="btn btn-secondary" id="download-btn">Download Backup</button>
+              <button class="btn btn-secondary" id="upload-btn">Upload Backup</button>
+              <input type="file" id="upload-input" accept=".json" class="hidden">
+            </div>
+            <p class="form-hint" style="margin-top:12px; line-height:1.6">
+              Download your freezer inventory to a JSON file. Uploading a backup will completely overwrite your current inventory and settings.
+            </p>
           </div>
 
           <!-- About -->
@@ -134,6 +148,19 @@ export class SettingsView {
 
     document.getElementById('save-btn')?.addEventListener('click', () => {
       void this.save();
+    });
+
+    document.getElementById('download-btn')?.addEventListener('click', () => {
+      void this.downloadBackup();
+    });
+
+    document.getElementById('upload-btn')?.addEventListener('click', () => {
+      document.getElementById('upload-input')?.click();
+    });
+
+    document.getElementById('upload-input')?.addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) void this.uploadBackup(file);
     });
 
     this.bindListItemListeners();
@@ -221,6 +248,41 @@ export class SettingsView {
 
     feedbackEl.classList.remove('hidden');
     setTimeout(() => feedbackEl.classList.add('hidden'), 2000);
+  }
+
+  private async downloadBackup(): Promise<void> {
+    const state = await this.app.storage.exportState();
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `freezer-inventory-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  private async uploadBackup(file: File): Promise<void> {
+    if (!confirm('This will completely overwrite your current inventory and settings. Are you sure?')) {
+      // Clear the input so the same file can be selected again if needed
+      (document.getElementById('upload-input') as HTMLInputElement).value = '';
+      return;
+    }
+    try {
+      const text = await file.text();
+      const state = JSON.parse(text) as AppState;
+      if (!state.settings || !state.items) {
+        throw new Error('Invalid backup file format');
+      }
+      await this.app.storage.importState(state);
+      alert('Backup restored successfully!');
+      void this.app.showHome();
+    } catch (err) {
+      alert(`Failed to restore backup: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      (document.getElementById('upload-input') as HTMLInputElement).value = '';
+    }
   }
 
   destroy(): void {}

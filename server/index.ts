@@ -163,6 +163,27 @@ app.put('/api/recent', (req, res) => {
   res.json({ ok: true });
 });
 
+// Full State
+app.get('/api/state', (_req, res) => {
+  const data = loadData();
+  res.json({
+    version: 1,
+    settings: data.settings,
+    items: data.items,
+    recent: data.recent,
+  });
+});
+
+app.put('/api/state', (req, res) => {
+  const body = req.body as { settings: any; items: any; recent: any };
+  const data = loadData();
+  if (body.settings) data.settings = body.settings;
+  if (body.items) data.items = body.items;
+  if (body.recent !== undefined) data.recent = body.recent;
+  saveData(data);
+  res.json({ ok: true });
+});
+
 // SPA fallback — serve index.html for any non-API route
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
